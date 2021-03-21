@@ -2,16 +2,14 @@ package app
 
 import (
 	"net/http"
-	"rate-limit-request/response"
-	"rate-limit-request/util/ginger"
+	"rate-limit-request/model"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 func appGetHandler(c *gin.Context) {
-	ctx := ginger.ExtendResponse(c, response.NewWrap())
-
-	data := ctx.MustGet("RateLimit")
-	ctx.WithData(data).Response(http.StatusOK, "")
+	data := c.MustGet("RateLimit").(model.RateLimit)
+	c.String(http.StatusOK, strconv.Itoa(data.Count))
 	return
 }

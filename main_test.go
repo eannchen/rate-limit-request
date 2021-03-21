@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"rate-limit-request/app"
 	"rate-limit-request/model"
@@ -28,33 +26,19 @@ func TestApp(t *testing.T) {
 			r.GET("/app").Run(app.RouterEngine(), func(tResp gofight.HTTPResponse, tReq gofight.HTTPRequest) {
 				switch tResp.Code {
 				case http.StatusOK:
-					var body struct {
-						Meta struct {
-							Code    int    `json:"code"`
-							Status  string `json:"status"`
-							Message string `json:"message"`
-						} `json:"meta"`
-						Data model.RateLimit `json:"data"`
-					}
-					if assert.Nil(t, json.Unmarshal([]byte(tResp.Body.String()), &body)) {
+					body := tResp.Body.String()
+					if assert.Regexp(t, "^[0-9]+$", body) {
 						finishCh <- true
-						fmt.Printf("%+v\n", body)
+						// fmt.Printf("%+v\n", body)
 					} else {
 						errCh <- struct{}{}
 					}
 
 				case http.StatusTooManyRequests:
-					var body struct {
-						Meta struct {
-							Code    int    `json:"code"`
-							Status  string `json:"status"`
-							Message string `json:"message"`
-						} `json:"meta"`
-						Data interface{} `json:"data"`
-					}
-					if assert.Nil(t, json.Unmarshal([]byte(tResp.Body.String()), &body)) {
+					body := tResp.Body.String()
+					if assert.Equal(t, "Error", body) {
 						finishCh <- false
-						fmt.Printf("%+v\n", body)
+						// fmt.Printf("%+v\n", body)
 					} else {
 						errCh <- struct{}{}
 					}
