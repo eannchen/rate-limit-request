@@ -12,58 +12,28 @@ import (
 
 // IncreaseRateLimit IncreaseRateLimit
 func (repo *CacheRepository) IncreaseRateLimit(ctx context.Context, key string) (rateLimit model.RateLimit, err error) {
-	for i := 0; i < repo.config.Redis.MaxRetries; i++ {
-		err = repo.client.Watch(ctx, func(tx *redis.Tx) error {
+	pipe := repo.client.Pipeline()
 
-			HGetRes := tx.HGetAll(ctx, key)
+	pipedCmds := []interface{}{
+		pipe.SetNX(ctx, key, 0, model.RateLimitExpireDuration),
+		pipe.Incr(ctx, key),
+	}
 
-			if err := HGetRes.Err(); err != nil && err != redis.Nil {
-				return err
-			}
-
-			if err := HGetRes.Scan(&rateLimit); err != nil {
-				return err
-			}
-
-			// create or reset flag
-			if rateLimit.Count == 0 || time.Unix(int64(rateLimit.Expire), 0).Before(time.Now()) {
-				tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					rateLimit = model.RateLimit{
-						Count:  1,
-						Expire: int(time.Now().Add(model.RateLimitExpireDuration).Unix()),
-					}
-					return pipe.HMSet(ctx, key, map[string]interface{}{
-						"count":  rateLimit.Count,
-						"expire": rateLimit.Expire,
-					}).Err()
-				})
-				return nil
-			}
-
-			// increase count
-			if rateLimit.Count <= model.RateLimitMaximum {
-				tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					if pipe.HIncrBy(ctx, key, "count", 1).Err() != nil {
-						return err
-					}
-					rateLimit.Count++
-					return nil
-				})
-			}
-
-			return err
-		}, key)
-		if err == nil {
-			// Success.
-			return
-		}
-		if err == redis.TxFailedErr {
-			// Optimistic lock lost. Retry.
-			continue
-		}
-		// Return any other error.
+	if _, err = pipe.Exec(ctx); err != nil {
 		return
 	}
+
+	// SetNX
+	if err = pipedCmds[0].(*redis.BoolCmd).Err(); err != nil {
+		return
+	}
+	// Incr
+	count, err := pipedCmds[1].(*redis.IntCmd).Result()
+	if err != nil {
+		return
+	}
+	rateLimit.Count = int(count)
+
 	return
 }
 
@@ -89,6 +59,7 @@ if #HGetRes == 0 or rateLimit["expire"] < nowUnix then
 	rateLimit["expire"] = nowUnix + expireDuration
 
     redis.call('HMSET', key, "count", rateLimit["count"], "expire", rateLimit["expire"])
+	redis.call('EXPIREAT', key, rateLimit["expire"])
     return cjson.encode(rateLimit)
 end
 
