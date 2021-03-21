@@ -12,26 +12,18 @@ import (
 
 // IncreaseRateLimit IncreaseRateLimit
 func (repo *CacheRepository) IncreaseRateLimit(ctx context.Context, key string) (rateLimit model.RateLimit, err error) {
-	pipe := repo.client.Pipeline()
 
-	pipedCmds := []interface{}{
-		pipe.SetNX(ctx, key, 0, model.RateLimitExpireDuration),
-		pipe.Incr(ctx, key),
+	count, err := repo.client.Incr(ctx, key).Result()
+
+	// key has just been created
+	if err == nil && count == 1 {
+		err = repo.client.ExpireAt(ctx, key, time.Now().Add(model.RateLimitExpireDuration)).Err()
 	}
 
-	if _, err = pipe.Exec(ctx); err != nil {
-		return
-	}
-
-	// SetNX
-	if err = pipedCmds[0].(*redis.BoolCmd).Err(); err != nil {
-		return
-	}
-	// Incr
-	count, err := pipedCmds[1].(*redis.IntCmd).Result()
 	if err != nil {
 		return
 	}
+
 	rateLimit.Count = int(count)
 
 	return
@@ -43,9 +35,6 @@ local key = KEYS[1]
 local nowUnix = tonumber(ARGV[1])
 local expireDuration = tonumber(ARGV[2])
 local rateLimitMaximum  = tonumber(ARGV[3])
-
-local ipLimit = tonumber(ARGV[2])
-
 
 local HGetRes = redis.call('HGETALL', key)
 local rateLimit = {}
