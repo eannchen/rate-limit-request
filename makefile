@@ -2,7 +2,7 @@ run:
 	go run main.go
 
 test:
-	go test
+	go test -v
 
 dkrps-prune:
 	docker image prune --force
