@@ -18,7 +18,7 @@ rate limit middleware 的功能要盡可能的快速，盡可能不要影響商�
 Redis 的操作邏輯，我做了兩個方法：
 ### 方法一
 使用 String type，當有請求時即寫入 value(請求次數) +1，若 key 剛被創建則也設置 ttl，時間到了就取消訪問限制。在此的指令直接設值，並且 Redis 對指令是 single thread，具 atomicity，避免 race condition 問題。
-```
+```go
 count, err := repo.client.Incr(ctx, key).Result()
 
 // key has just been created
@@ -64,7 +64,7 @@ return cjson.encode(rateLimit)
 ## Usage
 ### 啟動 Redis 及 phpRedisAdmin
 1. docker-compose up
-```
+```s
 $ make dkrps-up
 ```
 2. 訪問 phpRedisAdmin
@@ -74,18 +74,18 @@ http://localhost:8081
 
 ### 關閉 Redis 及 phpRedisAdmin
 1. docker-compose down
-```
+```s
 $ make dkrps-down
 ```
 
 ### 運行 Server
 1. 啟動 Go API server
-```
+```s
 $ make run
 ```
 
 2. 請求
-```
+```s
 $ curl -i http://localhost:8080/app
 ```
 response
